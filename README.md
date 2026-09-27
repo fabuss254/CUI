@@ -4,6 +4,8 @@ A class-based Roblox UI toolkit written in TypeScript. Vide renders the UI, Jani
 
 Components use scale for their outer width and pixels for their outer height. Their public API is methods, callbacks, and signals; Vide sources stay private inside the implementation.
 
+Class methods update private reactive state. Each JSX view accepts presentation props and callbacks, derives its styling and layout from those props, and owns its input bindings. Changing collections use Vide mappers with scoped cleanup; expandable content uses Vide springs. Named child types are inferred from the instances composed by the view, and component classes use the view's return type rather than a separately maintained instance tree.
+
 ## Development
 
 ```sh

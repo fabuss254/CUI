@@ -1,16 +1,26 @@
+﻿import Vide from "@rbxts/vide";
 import { ImageView } from "./Views/Image";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Image extends UIComponent<ImageView.T_UI> {
+export class Image extends UIComponent<ReturnType<typeof ImageView.Create>> {
 	// @outline PROPERTIES
 
+	private readonly State;
 	private ImageRevision = 0;
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, ImageView.Create);
+		const State = {
+			Image: Vide.source("rbxasset://textures/ui/GuiImagePlaceholder.png"),
+			ImageColor: Vide.source(Color3.fromRGB(255, 255, 255)),
+			ImageTransparency: Vide.source(0),
+			Padding: Vide.source(0),
+			Fit: Vide.source(false),
+		};
+		super(Manager, ID, (Props) => ImageView.Create({ ...Props, ...State }));
+		this.State = State;
 	}
 
 	// @outline METHODS
@@ -21,37 +31,35 @@ export class Image extends UIComponent<ImageView.T_UI> {
 		if (!typeIs(NewImage, "string")) {
 			this.Janitor.AddPromise(
 				NewImage.then((Image) => {
-					if (this.IsDestroyed() || this.ImageRevision !== Revision) return;
-					this.UI.Ctn.ImageLabel.Image = Image;
+					if (!this.IsDestroyed() && this.ImageRevision === Revision) this.State.Image(Image);
 				}),
 			);
 			return this;
 		}
-
-		this.UI.Ctn.ImageLabel.Image = NewImage;
+		this.State.Image(NewImage);
 		return this;
 	}
 
 	GetImage() {
-		return this.UI.Ctn.ImageLabel.Image;
+		return Vide.untrack(this.State.Image);
 	}
 
 	SetImageColor(NewColor: Color3) {
-		this.UI.Ctn.ImageLabel.ImageColor3 = NewColor;
+		this.State.ImageColor(NewColor);
 		return this;
 	}
 
 	GetImageColor() {
-		return this.UI.Ctn.ImageLabel.ImageColor3;
+		return Vide.untrack(this.State.ImageColor);
 	}
 
 	SetImageTransparency(NewTransparency: number) {
-		this.UI.Ctn.ImageLabel.ImageTransparency = NewTransparency;
+		this.State.ImageTransparency(NewTransparency);
 		return this;
 	}
 
 	GetImageTransparency() {
-		return this.UI.Ctn.ImageLabel.ImageTransparency;
+		return Vide.untrack(this.State.ImageTransparency);
 	}
 
 	SetHeight(NewHeight: number) {
@@ -60,13 +68,12 @@ export class Image extends UIComponent<ImageView.T_UI> {
 	}
 
 	SetPaddingScale(NewPadding: number) {
-		this.UI.Ctn.Size = UDim2.fromScale(1 - NewPadding, 1 - NewPadding);
+		this.State.Padding(NewPadding);
 		return this;
 	}
 
 	MakeItFit() {
-		this.UI.Ctn.FindFirstChild("UIAspectRatioConstraint")?.Destroy();
-		this.UI.Ctn.ImageLabel.ScaleType = Enum.ScaleType.Crop;
+		this.State.Fit(true);
 		return this;
 	}
 }

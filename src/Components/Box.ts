@@ -1,39 +1,43 @@
+import Vide from "@rbxts/vide";
 import { BoxView } from "./Views/Box";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Box extends UIComponent<BoxView.T_UI> {
+export class Box extends UIComponent<ReturnType<typeof BoxView.Create>> {
 	// @outline PROPERTIES
 
-	private CachedVisibility = true;
+	private readonly State;
 
 	Components = this.Manager.CreateChildManager(this.UI, this);
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, BoxView.Create);
+		const State = {
+			HorizontalAlignment: Vide.source<Enum.HorizontalAlignment>(Enum.HorizontalAlignment.Left),
+			VerticalAlignment: Vide.source<Enum.VerticalAlignment>(Enum.VerticalAlignment.Top),
+		};
+		super(Manager, ID, (Props) => BoxView.Create({ ...Props, ...State }));
+		this.State = State;
 		this.Janitor.Add(this.Components, "Destroy");
 	}
 
 	// @outline PRIVATE_METHODS
 
 	protected UpdateEnabledDisplay() {
-		const IsEnabled = this.GetEnabled();
-		this.SetVisible(IsEnabled && this.CachedVisibility, true);
+		this.UpdateParentHeight();
 	}
 
 	// @outline METHODS
 
 	SetAlignment(HorizontalAlignment?: Enum.HorizontalAlignment, VerticalAlignment?: Enum.VerticalAlignment) {
-		if (HorizontalAlignment) this.UI.UIListLayout.HorizontalAlignment = HorizontalAlignment;
-		if (VerticalAlignment) this.UI.UIListLayout.VerticalAlignment = VerticalAlignment;
+		if (HorizontalAlignment) this.State.HorizontalAlignment(HorizontalAlignment);
+		if (VerticalAlignment) this.State.VerticalAlignment(VerticalAlignment);
 		return this;
 	}
 
-	SetVisible(Visible: boolean, Internal?: boolean): this {
-		if (!Internal) this.CachedVisibility = Visible;
-		return super.SetVisible(Visible);
+	GetVisible(): boolean {
+		return super.GetVisible() && this.GetEnabled();
 	}
 
 	GetHeight(): number {

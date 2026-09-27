@@ -5,6 +5,8 @@ import { ClassUtils } from "../Libraries/ClassUtils";
 import Signal from "../Libraries/signal";
 import type { UIState } from "../Internal/UIState";
 
+const ComponentRoots = new Set<Instance>();
+
 export class UIComponent<T extends GuiObject> {
 	// @outline PROPERTIES
 
@@ -16,13 +18,13 @@ export class UIComponent<T extends GuiObject> {
 	protected Destroyed = false;
 
 	private ZOffset = 0;
+	private readonly ZLayer = Vide.source(0);
 	private readonly Visible = Vide.source(true);
 	private readonly RootSize = Vide.source<UDim2>();
 	private readonly BackgroundColor = Vide.source<Color3>();
 	private readonly BackgroundTransparency = Vide.source<number>();
 	private readonly LayoutOrder = Vide.source(0);
-	private Enabled = true;
-	private EnabledTarget = true;
+	private readonly Enabled = Vide.source(true);
 	private EnabledPermission: string | string[] | undefined;
 	private EnabledRank: number | undefined;
 
@@ -33,28 +35,62 @@ export class UIComponent<T extends GuiObject> {
 	constructor(Manager: CUI.ComponentManager, ID: string, CreateUI: (Props: UIState.T_Props) => T) {
 		this.Manager = Manager;
 		this.ID = ID;
-		this.UI = this.CreateOwnedUI(() =>
-			CreateUI({
+		this.UI = this.CreateOwnedUI(() => {
+			const UI = CreateUI({
 				Visible: this.Visible,
 				Size: this.RootSize,
 				BackgroundColor3: this.BackgroundColor,
 				BackgroundTransparency: this.BackgroundTransparency,
 				LayoutOrder: this.LayoutOrder,
-			}),
-		);
-		this.UI.Name = ClassUtils.GetClassName(ClassUtils.GetClassFromInstance(this));
-		this.UI.Visible = true;
-		this.UI.GetDescendants().forEach((Descendant) => {
-			if (Descendant.IsA("GuiObject")) this.AllGuiObjects.add(Descendant);
+				Enabled: this.Enabled,
+			});
+			ComponentRoots.add(UI);
+			this.AllGuiObjects.add(UI);
+			UI.GetDescendants().forEach((Descendant) => this.TrackGuiObject(Descendant, UI));
+			Vide.effect(() => {
+				const Layer = this.ZLayer();
+				this.AllGuiObjects.forEach((Object) => this.ApplyZIndex(Object, Layer));
+			});
+			Vide.cleanup(() => ComponentRoots.delete(UI));
+			return UI;
 		});
-		this.AllGuiObjects.add(this.UI);
+		this.UI.Name = ClassUtils.GetClassName(ClassUtils.GetClassFromInstance(this));
+		this.Janitor.Add(
+			this.UI.DescendantAdded.Connect((Descendant) => this.TrackGuiObject(Descendant, this.UI)),
+			"Disconnect",
+		);
+		this.Janitor.Add(
+			this.UI.DescendantRemoving.Connect((Descendant) => {
+				if (Descendant.IsA("GuiObject")) this.AllGuiObjects.delete(Descendant);
+			}),
+			"Disconnect",
+		);
 		this.SetZIndex(1000 * this.GetDepth());
 		this.UI.Parent = Manager.ContentFrame;
 		Manager.RegisterComponent(ID, this);
-		this.Janitor.Add(this.UI.Destroying.Connect(() => this.Destroy()), "Disconnect");
+		this.Janitor.Add(
+			this.UI.Destroying.Connect(() => this.Destroy()),
+			"Disconnect",
+		);
 	}
 
 	// @outline PRIVATE_METHODS
+
+	private ApplyZIndex(UI: GuiObject, Layer: number) {
+		if (UI.GetAttribute("DefaultZIndex") === undefined) UI.SetAttribute("DefaultZIndex", UI.ZIndex);
+		UI.ZIndex = (UI.GetAttribute("DefaultZIndex") as number) + Layer;
+	}
+
+	private TrackGuiObject(Descendant: Instance, Root: GuiObject) {
+		if (!Descendant.IsA("GuiObject")) return;
+		let Ancestor: Instance | undefined = Descendant;
+		while (Ancestor && Ancestor !== Root) {
+			if (ComponentRoots.has(Ancestor)) return;
+			Ancestor = Ancestor.Parent;
+		}
+		this.AllGuiObjects.add(Descendant);
+		this.ApplyZIndex(Descendant, Vide.untrack(this.ZLayer));
+	}
 
 	protected CreateOwnedUI<U extends Instance>(CreateUI: () => U, Owner = this.Janitor): U {
 		const [Destroy, UI] = Vide.root(() => {
@@ -82,10 +118,7 @@ export class UIComponent<T extends GuiObject> {
 
 	SetZIndex(Offset: number) {
 		this.ZOffset = Offset;
-		this.AllGuiObjects.forEach((UI) => {
-			if (UI.GetAttribute("DefaultZIndex") === undefined) UI.SetAttribute("DefaultZIndex", UI.ZIndex);
-			UI.ZIndex = (UI.GetAttribute("DefaultZIndex") as number) + Offset + this.GetMainContainer().GetZIndex();
-		});
+		this.ZLayer(Offset + this.GetMainContainer().GetZIndex());
 		return this;
 	}
 
@@ -94,7 +127,7 @@ export class UIComponent<T extends GuiObject> {
 	}
 
 	SetVisible(Visible: boolean) {
-		if (this.GetVisible() !== Visible) {
+		if (Vide.untrack(this.Visible) !== Visible) {
 			this.Visible(Visible);
 			this.UpdateParentHeight();
 		}
@@ -167,12 +200,14 @@ export class UIComponent<T extends GuiObject> {
 	}
 
 	GetEnabled() {
-		return this.EnabledTarget;
+		return Vide.untrack(this.Enabled);
 	}
 
 	SetEnabled(IsEnabled: boolean) {
-		this.EnabledTarget = IsEnabled;
-		this.UpdateEnabled();
+		if (this.GetEnabled() === IsEnabled) return this;
+		this.Enabled(IsEnabled);
+		this.UpdateEnabledDisplay();
+		this.OnEnabledChanged.Fire(IsEnabled);
 		return this;
 	}
 
@@ -190,11 +225,7 @@ export class UIComponent<T extends GuiObject> {
 	}
 
 	protected UpdateEnabled() {
-		const Enabled = this.GetEnabled();
-		if (Enabled === this.Enabled) return;
-		this.Enabled = Enabled;
 		this.UpdateEnabledDisplay();
-		this.OnEnabledChanged.Fire(Enabled);
 	}
 
 	protected UpdateEnabledDisplay() {}

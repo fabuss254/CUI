@@ -3,7 +3,7 @@ import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
 type GraphValue = [number, number, [number, number], [number, number]];
-export class Graph extends UIComponent<GraphView.T_UI> {
+export class Graph extends UIComponent<ReturnType<typeof GraphView.Create>> {
 	// @outline PROPERTIES
 
 	GraphValue: GraphValue = [0, 0, [0, 0], [0, 0]];

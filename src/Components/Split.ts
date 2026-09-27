@@ -1,25 +1,38 @@
+import Vide from "@rbxts/vide";
 import { SplitView } from "./Views/Split";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Split extends UIComponent<SplitView.T_UI> {
+export class Split extends UIComponent<ReturnType<typeof SplitView.Create>> {
 	// @outline PROPERTIES
 
-	LeftComponents = this.Manager.CreateChildManager(
-		this.UI.Left,
-		this,
-		() => this.UI.Left.Size.X.Offset + this.UI.Left.Size.X.Scale * this.GetWidth(),
-	);
-	RightComponents = this.Manager.CreateChildManager(
-		this.UI.Right,
-		this,
-		() => this.UI.Right.Size.X.Offset + this.UI.Right.Size.X.Scale * this.GetWidth(),
-	);
+	private readonly State;
+
+	LeftComponents = this.Manager.CreateChildManager(this.UI.Left, this, () => {
+		const Size = Vide.untrack(this.State.LeftWidth);
+		return Size.Offset + Size.Scale * this.GetWidth();
+	});
+	RightComponents = this.Manager.CreateChildManager(this.UI.Right, this, () => {
+		const Size = Vide.untrack(this.State.LeftWidth);
+		return (1 - Size.Scale) * this.GetWidth() - Size.Offset;
+	});
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, SplitView.Create);
+		const State = {
+			LeftWidth: Vide.source(new UDim(0.5, 0)),
+			Left: {
+				HorizontalAlignment: Vide.source<Enum.HorizontalAlignment>(Enum.HorizontalAlignment.Left),
+				VerticalAlignment: Vide.source<Enum.VerticalAlignment>(Enum.VerticalAlignment.Top),
+			},
+			Right: {
+				HorizontalAlignment: Vide.source<Enum.HorizontalAlignment>(Enum.HorizontalAlignment.Left),
+				VerticalAlignment: Vide.source<Enum.VerticalAlignment>(Enum.VerticalAlignment.Top),
+			},
+		};
+		super(Manager, ID, (Props) => SplitView.Create({ ...Props, ...State }));
+		this.State = State;
 		this.Janitor.Add(this.LeftComponents, "Destroy");
 		this.Janitor.Add(this.RightComponents, "Destroy");
 	}
@@ -27,36 +40,32 @@ export class Split extends UIComponent<SplitView.T_UI> {
 	// @outline METHODS
 
 	SetLeftSizePercent(Size: number) {
-		this.UI.Left.Size = UDim2.fromScale(Size, 1);
-		this.UI.Right.Size = UDim2.fromScale(1 - Size, 1);
+		this.State.LeftWidth(new UDim(Size, 0));
 		return this;
 	}
 
 	SetLeftSizeAbsolute(Size: number) {
-		this.UI.Left.Size = new UDim2(0, Size, 1, 0);
-		this.UI.Right.Size = new UDim2(1, -Size, 1, 0);
+		this.State.LeftWidth(new UDim(0, Size));
 		return this;
 	}
 
 	SetRightSizePercent(Size: number) {
-		this.UI.Right.Size = UDim2.fromScale(Size, 1);
-		this.UI.Left.Size = UDim2.fromScale(1 - Size, 1);
+		this.State.LeftWidth(new UDim(1 - Size, 0));
 		return this;
 	}
 
 	SetRightSizeAbsolute(Size: number) {
-		this.UI.Right.Size = new UDim2(0, Size, 1, 0);
-		this.UI.Left.Size = new UDim2(1, -Size, 1, 0);
+		this.State.LeftWidth(new UDim(1, -Size));
 		return this;
 	}
 
 	SetVerticalAlignment(Side: "Left" | "Right", Alignment: Enum.VerticalAlignment) {
-		this.UI[Side].UIListLayout.VerticalAlignment = Alignment;
+		this.State[Side].VerticalAlignment(Alignment);
 		return this;
 	}
 
 	SetHorizontalAlignment(Side: "Left" | "Right", Alignment: Enum.HorizontalAlignment) {
-		this.UI[Side].UIListLayout.HorizontalAlignment = Alignment;
+		this.State[Side].HorizontalAlignment(Alignment);
 		return this;
 	}
 

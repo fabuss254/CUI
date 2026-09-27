@@ -1,78 +1,69 @@
-import Vide from "@rbxts/vide";
+﻿import Vide from "@rbxts/vide";
 import { ButtonView } from "./Views/Button";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Button extends UIComponent<ButtonView.T_UI> {
+export class Button extends UIComponent<ReturnType<typeof ButtonView.Create>> {
 	// @outline PROPERTIES
 
+	private readonly State;
 	private Callback = () => {};
-	private NeedConfirmation = false;
-	private ButtonText = "";
-	private ButtonLabel: Vide.Source<string | undefined>;
-	private OriginalButtonColor = this.UI.Btn.BackgroundColor3;
-	private OriginalTextColor = this.UI.Btn.TextColor3;
+	private RevertTask: thread | undefined;
+	private readonly OriginalButtonColor = Color3.fromRGB(60, 60, 60);
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		const ButtonLabel = Vide.source<string | undefined>(undefined);
-		super(Manager, ID, (Props) => ButtonView.Create({ ...Props, ButtonText: ButtonLabel }));
-		this.ButtonLabel = ButtonLabel;
-
-		let RevertTask: thread | undefined = undefined;
-		this.Janitor.Add(() => {
-			if (RevertTask) task.cancel(RevertTask);
-		}, true);
-		this.Janitor.Add(
-			this.UI.Btn.MouseButton1Click.Connect(() => {
-				if (!this.GetEnabled()) return;
-				if (this.NeedConfirmation) {
-					if (RevertTask) {
-						task.cancel(RevertTask);
-						RevertTask = undefined;
-
-						this.ButtonLabel(this.ButtonText);
-						this.Callback();
-						return;
-					}
-
-					this.ButtonLabel("Confirm?");
-					RevertTask = task.delay(2, () => {
-						this.ButtonLabel(this.ButtonText);
-						RevertTask = undefined;
-					});
-					return;
-				} else {
-					this.Callback();
-				}
+		const State = {
+			Text: Vide.source("Export to Attributes"),
+			Color: Vide.source(Color3.fromRGB(60, 60, 60)),
+			NeedConfirmation: Vide.source(false),
+			Confirming: Vide.source(false),
+		};
+		super(Manager, ID, (Props) =>
+			ButtonView.Create({
+				...Props,
+				ButtonText: () => (State.Confirming() ? "Confirm?" : State.Text()),
+				ButtonColor: State.Color,
+				OnActivated: () => this.Activate(),
 			}),
-			"Disconnect",
 		);
+		this.State = State;
+		this.Janitor.Add(() => {
+			if (this.RevertTask) task.cancel(this.RevertTask);
+		}, true);
 	}
 
 	// @outline PRIVATE_METHODS
 
-	protected UpdateEnabledDisplay(): void {
-		const IsEnabled = this.GetEnabled();
+	private Activate() {
+		if (!this.GetEnabled()) return;
+		if (Vide.untrack(this.State.NeedConfirmation)) {
+			if (!Vide.untrack(this.State.Confirming)) {
+				this.State.Confirming(true);
+				this.RevertTask = task.delay(2, () => {
+					this.State.Confirming(false);
+					this.RevertTask = undefined;
+				});
+				return;
+			}
 
-		this.UI.Btn.AutoButtonColor = IsEnabled;
-		this.UI.Btn.BackgroundColor3 = IsEnabled ? this.OriginalButtonColor : Color3.fromRGB(110, 110, 110);
-		this.UI.Btn.TextColor3 = IsEnabled ? this.OriginalTextColor : Color3.fromRGB(191, 191, 191);
+			if (this.RevertTask) task.cancel(this.RevertTask);
+			this.RevertTask = undefined;
+			this.State.Confirming(false);
+		}
+		this.Callback();
 	}
 
 	// @outline METHODS
 
 	SetButtonText(NewText: string) {
-		if (!this.UI || !this.UI.Parent) return this;
-
-		this.ButtonText = NewText;
-		this.ButtonLabel(NewText);
+		this.State.Text(NewText);
 		return this;
 	}
 
 	GetButtonText() {
-		return this.ButtonText;
+		return Vide.untrack(this.State.Text);
 	}
 
 	SetButtonCallback(Callback: () => void) {
@@ -86,17 +77,17 @@ export class Button extends UIComponent<ButtonView.T_UI> {
 	}
 
 	DoNeedConfirmation(DoNeedConfirmation: boolean) {
-		this.NeedConfirmation = DoNeedConfirmation;
+		this.State.NeedConfirmation(DoNeedConfirmation);
 		return this;
 	}
 
 	SetButtonColor(Color: Color3) {
-		this.UI.Btn.BackgroundColor3 = Color;
+		this.State.Color(Color);
 		return this;
 	}
 
 	GetButtonColor() {
-		return this.UI.Btn.BackgroundColor3;
+		return this.GetEnabled() ? Vide.untrack(this.State.Color) : Color3.fromRGB(110, 110, 110);
 	}
 
 	GetButtonOriginalColor() {

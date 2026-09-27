@@ -5,18 +5,52 @@ import { ViewDefaults } from "./Defaults";
 export namespace ImageView {
 	// @outline TYPES
 
-	export type T_UI = Frame & {
-		Ctn: Frame & {
-			UIAspectRatioConstraint: UIAspectRatioConstraint;
-			ImageLabel: ImageLabel;
-		};
+	export type T_Props = UIState.T_Props & {
+		Image?: Vide.Derivable<string>;
+		ImageColor?: Vide.Derivable<Color3>;
+		ImageTransparency?: Vide.Derivable<number>;
+		Padding?: Vide.Derivable<number>;
+		Fit?: Vide.Derivable<boolean>;
 	};
-
-	export type T_Props = UIState.T_Props;
 
 	// @outline FUNCTIONS
 
-	export function Create(Props: T_Props = {}): T_UI {
+	export function Create(Props: T_Props = {}) {
+		const CtnChildren = {
+			ImageLabel: (
+				<imagelabel
+					{...ViewDefaults.ImageLabel}
+					Name="ImageLabel"
+					Size={UDim2.fromScale(1, 1)}
+					Image={() => Vide.read(Props.Image ?? "rbxasset://textures/ui/GuiImagePlaceholder.png")}
+					ImageColor3={() => Vide.read(Props.ImageColor ?? Color3.fromRGB(255, 255, 255))}
+					ImageTransparency={() => Vide.read(Props.ImageTransparency ?? 0)}
+					ScaleType={() => (Vide.read(Props.Fit ?? false) ? Enum.ScaleType.Crop : Enum.ScaleType.Stretch)}
+				/>
+			) as ImageLabel,
+		};
+
+		const Children = {
+			Ctn: (
+				<frame
+					{...ViewDefaults.Frame}
+					Name="Ctn"
+					Size={() => UDim2.fromScale(1 - Vide.read(Props.Padding ?? 0), 1 - Vide.read(Props.Padding ?? 0))}
+					AnchorPoint={new Vector2(0.5, 0.5)}
+					Position={UDim2.fromScale(0.5, 0.5)}
+					BackgroundTransparency={1}
+				>
+					{CtnChildren.ImageLabel}
+					{Vide.show(
+						() => !Vide.read(Props.Fit ?? false),
+						() => (
+							<uiaspectratioconstraint {...ViewDefaults.UIAspectRatioConstraint} Name="UIAspectRatioConstraint" />
+						),
+					)}
+				</frame>
+			) as Frame & typeof CtnChildren,
+		};
+
 		return (
 			<frame
 				{...ViewDefaults.Frame}
@@ -27,22 +61,8 @@ export namespace ImageView {
 				BackgroundTransparency={() => Props.BackgroundTransparency?.() ?? 1}
 				LayoutOrder={() => Props.LayoutOrder?.() ?? 0}
 			>
-				<frame
-					{...ViewDefaults.Frame}
-					Name="Ctn"
-					AnchorPoint={new Vector2(0.5, 0.5)}
-					Position={UDim2.fromScale(0.5, 0.5)}
-					BackgroundTransparency={1}
-				>
-					<uiaspectratioconstraint {...ViewDefaults.UIAspectRatioConstraint} Name="UIAspectRatioConstraint" />
-					<imagelabel
-						{...ViewDefaults.ImageLabel}
-						Name="ImageLabel"
-						Size={UDim2.fromScale(1, 1)}
-						Image={"rbxasset://textures/ui/GuiImagePlaceholder.png"}
-					/>
-				</frame>
+				{Children.Ctn}
 			</frame>
-		) as T_UI;
+		) as Frame & typeof Children;
 	}
 }

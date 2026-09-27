@@ -1,81 +1,65 @@
-import Vide from "@rbxts/vide";
+﻿import Vide from "@rbxts/vide";
 import { FieldView } from "./Views/Field";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Field<TValue = string> extends UIComponent<FieldView.T_UI> {
+export class Field<TValue = string> extends UIComponent<ReturnType<typeof FieldView.Create>> {
 	// @outline PROPERTIES
 
-	private OnChangedRaw = (Value: string) => {};
+	private readonly State;
 	private OnChangedEntered: (Value: TValue) => void = () => {};
-
 	private Filter = (Value: string) => Value;
-
-	private DoSelectAllOnFocus = true;
 	private DoEnterCheck = false;
-
-	private IsFocused = false;
-	private CurValue = undefined as TValue;
-	private CurText = "";
-	private ValueText: Vide.Source<string>;
 	private ValueRevision = 0;
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		const ValueText = Vide.source("0");
-		super(Manager, ID, (Props) => FieldView.Create({ ...Props, ValueText }));
-		this.ValueText = ValueText;
-
-		this.Janitor.Add(
-			this.UI.Right.TextBox.GetPropertyChangedSignal("Text").Connect(() => {
-				if (!this.UI.FindFirstChild("Right")) return;
-				this.ValueText(this.UI.Right.TextBox.Text);
-				this.OnChangedRaw(this.UI.Right.TextBox.Text);
+		const State = {
+			Text: Vide.source("Position Y"),
+			TextVisible: Vide.source(true),
+			Value: Vide.source<TValue>(undefined as TValue),
+			CommittedText: Vide.source(""),
+			ValueText: Vide.source("0"),
+			Placeholder: Vide.source(""),
+			Focused: Vide.source(false),
+			SelectAllOnFocus: Vide.source(true),
+			OnChangedRaw: (Value: string) => {},
+		};
+		super(Manager, ID, (Props) =>
+			FieldView.Create({
+				...Props,
+				...State,
+				OnTextChanged: (Text) => {
+					State.ValueText(Text);
+					State.OnChangedRaw(Text);
+				},
+				OnFocused: () => State.Focused(true),
+				OnFocusLost: (EnterPressed) => this.Commit(EnterPressed),
 			}),
-			"Disconnect",
 		);
-
-		this.Janitor.Add(
-			this.UI.Right.TextBox.Focused.Connect(() => {
-				this.IsFocused = true;
-
-				if (!this.UI.FindFirstChild("Right")) return;
-				this.UI.Right.TextBox.TextTruncate = Enum.TextTruncate.None;
-
-				if (!this.DoSelectAllOnFocus) return;
-				this.UI.Right.TextBox.CursorPosition = this.UI.Right.TextBox.Text.size() + 1;
-				this.UI.Right.TextBox.SelectionStart = 1;
-			}),
-			"Disconnect",
-		);
-
-		this.Janitor.Add(
-			this.UI.Right.TextBox.FocusLost.Connect((EnterPressed) => {
-				this.IsFocused = false;
-
-				if (!this.UI.FindFirstChild("Right")) return;
-				this.UI.Right.TextBox.TextTruncate = Enum.TextTruncate.AtEnd;
-
-				//if (!this.OnChangedEntered) return;
-				if (!this.GetEnabled() || (this.DoEnterCheck && EnterPressed === false)) {
-					this.ValueText(this.CurText);
-					return;
-				}
-
-				const NewText = this.Filter(this.UI.Right.TextBox.Text);
-				const NewValue = this.TextToValue(NewText);
-				const DisplayText = this.ValueToText(NewValue);
-				this.ValueText(DisplayText);
-				this.CurText = DisplayText;
-				this.CurValue = NewValue;
-				this.OnChangedEntered(NewValue);
-			}),
-			"Disconnect",
-		);
+		this.State = State;
 	}
 
 	// @outline PRIVATE_METHODS
+
+	private Commit(EnterPressed: boolean) {
+		this.State.Focused(false);
+		if (!this.GetEnabled() || (this.DoEnterCheck && !EnterPressed)) {
+			this.State.ValueText(Vide.untrack(this.State.CommittedText));
+			return;
+		}
+
+		const NewText = this.Filter(Vide.untrack(this.State.ValueText));
+		const NewValue = this.TextToValue(NewText);
+		const DisplayText = this.ValueToText(NewValue);
+		Vide.batch(() => {
+			this.State.Value(NewValue);
+			this.State.CommittedText(DisplayText);
+			this.State.ValueText(DisplayText);
+		});
+		this.OnChangedEntered(NewValue);
+	}
 
 	protected TextToValue(Text: string): TValue {
 		return Text as unknown as TValue;
@@ -85,33 +69,20 @@ export class Field<TValue = string> extends UIComponent<FieldView.T_UI> {
 		return Value as unknown as string;
 	}
 
-	protected UpdateEnabledDisplay(): void {
-		const IsEnabled = this.GetEnabled();
-
-		this.UI.Right.TextBox.TextEditable = IsEnabled;
-		this.UI.Right.NonEnabled.Visible = !IsEnabled;
-		this.UI.Right.TextBox.TextTransparency = IsEnabled ? 0 : 0.25;
-	}
-
 	// @outline METHODS
 
 	SetDoSelectAllOnFocus(DoSelectAllOnFocus: boolean) {
-		this.DoSelectAllOnFocus = DoSelectAllOnFocus;
+		this.State.SelectAllOnFocus(DoSelectAllOnFocus);
 		return this;
 	}
 
 	SetText(Text: string) {
-		if (!this.UI || !this.UI.FindFirstChild("Left")) return this;
-
-		this.UI.Left.Title.Text = Text;
+		this.State.Text(Text);
 		return this;
 	}
 
 	SetTextVisible(Visible: boolean) {
-		if (!this.UI || !this.UI.FindFirstChild("Left")) return this;
-
-		this.UI.Left.Visible = Visible;
-		this.UI.Right.Size = Visible ? new UDim2(0.5, -1, 1, 0) : UDim2.fromScale(1, 1);
+		this.State.TextVisible(Visible);
 		return this;
 	}
 
@@ -119,41 +90,41 @@ export class Field<TValue = string> extends UIComponent<FieldView.T_UI> {
 		if (this.IsDestroyed()) return this;
 		const Revision = ++this.ValueRevision;
 		if (typeIs(Value, "table")) {
-			this.ValueText("<LOADING>");
+			this.State.ValueText("<LOADING>");
 			this.Janitor.AddPromise(
 				Value.then((NewValue) => {
 					if (!this.IsDestroyed() && this.ValueRevision === Revision) this.SetValue(NewValue);
 				}).catch(() => {
-					if (!this.IsDestroyed() && this.ValueRevision === Revision) this.ValueText("<ERROR>");
+					if (!this.IsDestroyed() && this.ValueRevision === Revision) this.State.ValueText("<ERROR>");
 				}),
 			);
-
 			return this;
 		}
 
-		this.CurValue = Value;
-		this.CurText = this.ValueToText(Value);
-		if (!this.IsFocused) {
-			this.ValueText(this.CurText);
-		}
+		const Text = this.ValueToText(Value);
+		Vide.batch(() => {
+			this.State.Value(Value);
+			this.State.CommittedText(Text);
+			if (!Vide.untrack(this.State.Focused)) this.State.ValueText(Text);
+		});
 		return this;
 	}
 
 	GetValue() {
-		return this.CurValue;
+		return Vide.untrack(this.State.Value);
 	}
 
 	SetPlaceholder(Placeholder: string) {
-		this.UI.Right.TextBox.PlaceholderText = Placeholder;
+		this.State.Placeholder(Placeholder);
 		return this;
 	}
 
 	GetPlaceholder() {
-		return this.UI.Right.TextBox.PlaceholderText;
+		return Vide.untrack(this.State.Placeholder);
 	}
 
 	SetOnChangedRaw(Callback: (Value: string) => void) {
-		this.OnChangedRaw = Callback;
+		this.State.OnChangedRaw = Callback;
 		return this;
 	}
 
@@ -174,7 +145,6 @@ export class Field<TValue = string> extends UIComponent<FieldView.T_UI> {
 			const CurVal = math.clamp(tonumber(Value) ?? 0, Min ?? -math.huge, Max ?? math.huge);
 			return tostring(CurVal);
 		};
-
 		return this;
 	}
 

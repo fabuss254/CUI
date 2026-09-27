@@ -5,18 +5,27 @@ import { ViewDefaults } from "./Defaults";
 export namespace TitleView {
 	// @outline TYPES
 
-	export type T_UI = Frame & {
-		TextLabel: TextLabel;
-	};
-
 	export type T_Props = UIState.T_Props & {
-		Title?: () => string | undefined;
+		Title?: Vide.Derivable<string>;
+		TitleVisible?: Vide.Derivable<boolean>;
 	};
 
 	// @outline FUNCTIONS
 
-	export function Create(Props: T_Props = {}): T_UI {
-		const { Title } = Props;
+	export function Create(Props: T_Props = {}) {
+		const Children = {
+			TextLabel: (
+				<textlabel
+					{...ViewDefaults.TextLabel}
+					Name="TextLabel"
+					Visible={() => Vide.read(Props.TitleVisible ?? true)}
+					Size={new UDim2(1, -6, 1, -2)}
+					TextColor3={Color3.fromRGB(170, 170, 170)}
+					action={ViewDefaults.Attributes({ _TextColor3: "TitlebarText" })}
+					Text={() => Vide.read(Props.Title ?? "•   Exporting")}
+				/>
+			) as TextLabel,
+		};
 
 		return (
 			<frame
@@ -32,15 +41,8 @@ export namespace TitleView {
 				BackgroundTransparency={() => Props.BackgroundTransparency?.() ?? 0}
 				LayoutOrder={() => Props.LayoutOrder?.() ?? 0}
 			>
-				<textlabel
-					{...ViewDefaults.TextLabel}
-					Name="TextLabel"
-					Size={new UDim2(1, -6, 1, -2)}
-					TextColor3={Color3.fromRGB(170, 170, 170)}
-					action={ViewDefaults.Attributes({ _TextColor3: "TitlebarText" })}
-					Text={() => Title?.() ?? "•   Exporting"}
-				/>
+				{Children.TextLabel}
 			</frame>
-		) as T_UI;
+		) as Frame & typeof Children;
 	}
 }

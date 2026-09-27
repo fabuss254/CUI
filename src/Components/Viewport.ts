@@ -1,90 +1,71 @@
+import Vide from "@rbxts/vide";
 import { ViewportView } from "./Views/Viewport";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class Viewport extends UIComponent<ViewportView.T_UI> {
+export class Viewport extends UIComponent<ReturnType<typeof ViewportView.Create>> {
 	// @outline PROPERTIES
 
-	private DisplayedModel: PVInstance | undefined = undefined;
+	private readonly State;
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, ViewportView.Create);
-
-		// Setup the viewport frame
-		this.Cleanup();
-
-		const Camera = new Instance("Camera");
-		Camera.FieldOfView = 30;
-		Camera.Parent = this.UI.ViewportFrame;
-
-		this.GetViewportInstance().CurrentCamera = Camera;
-	}
-
-	// @outline PRIVATE_METHODS
-
-	private Cleanup() {
-		this.UI.ViewportFrame.GetChildren()
-			.filter((Child) => Child.IsA("Model"))
-			.forEach((Child) => Child.Destroy());
+		const State = {
+			Model: Vide.source<PVInstance>(),
+			CameraCFrame: Vide.source(new CFrame()),
+			FieldOfView: Vide.source(30),
+		};
+		super(Manager, ID, (Props) => ViewportView.Create({ ...Props, ...State }));
+		this.State = State;
+		this.Janitor.Add(() => this.Clear(), true);
 	}
 
 	// @outline METHODS
 
 	Clear() {
-		this.Cleanup();
-		if (this.DisplayedModel) {
-			this.DisplayedModel.Destroy();
-			this.DisplayedModel = undefined;
-		}
-
+		const Model = this.GetModel();
+		this.State.Model(undefined);
+		Model?.Destroy();
 		return this;
 	}
 
 	SetYSize(Size: number) {
 		this.SetRootSize(new UDim2(1, 0, 0, math.max(Size, 0)));
 		this.UpdateParentHeight();
-
 		return this;
 	}
 
-	SetModel(NewMdl: PVInstance) {
-		if (this.DisplayedModel) {
-			this.DisplayedModel.Destroy();
-		}
-
-		const MdlClone = NewMdl.Clone();
-		MdlClone.PivotTo(new CFrame());
-		MdlClone.Parent = this.UI.ViewportFrame;
-		this.DisplayedModel = MdlClone;
-
+	SetModel(NewModel: PVInstance) {
+		const Previous = this.GetModel();
+		const Clone = NewModel.Clone();
+		Clone.PivotTo(new CFrame());
+		this.State.Model(Clone);
+		Previous?.Destroy();
 		return this;
 	}
 
-	SetDefaultCamera(Zoom: number = 6, FOV = 10) {
-		const Camera = this.GetCamera();
+	SetDefaultCamera(Zoom = 6, FOV = 10) {
 		const Model = this.GetModel();
-		if (Camera && Model) {
-			const TempModel = new Instance("Model");
-			Model.Clone().Parent = TempModel;
-
-			const [_, Size] = TempModel.GetBoundingBox();
-			Camera.FieldOfView = FOV;
-			Camera.CFrame = CFrame.lookAt(Size.mul(Zoom).mul(new Vector3(1, 2, 1)), Vector3.zero);
-
-			TempModel.Destroy();
+		if (Model) {
+			const BoundsModel = new Instance("Model");
+			Model.Clone().Parent = BoundsModel;
+			const [, Size] = BoundsModel.GetBoundingBox();
+			BoundsModel.Destroy();
+			Vide.batch(() => {
+				this.State.FieldOfView(FOV);
+				this.State.CameraCFrame(CFrame.lookAt(Size.mul(Zoom).mul(new Vector3(1, 2, 1)), Vector3.zero));
+			});
 		}
-
 		return this;
 	}
 
 	GetModel() {
-		return this.DisplayedModel;
+		return Vide.untrack(this.State.Model);
 	}
 
 	GetCamera() {
-		return this.UI.ViewportFrame.FindFirstChild("Camera") as Camera | undefined;
+		return this.UI.ViewportFrame.Camera;
 	}
 
 	GetViewportInstance() {

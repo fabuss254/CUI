@@ -1,164 +1,89 @@
+import Vide from "@rbxts/vide";
 import { Richtext } from "../Libraries/Richtext";
 import { RichTextEditorView } from "./Views/RichTextEditor";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class RichtextEditor extends UIComponent<RichTextEditorView.T_UI> {
+export class RichtextEditor extends UIComponent<ReturnType<typeof RichTextEditorView.Create>> {
 	// @outline PROPERTIES
 
-	private IsPreviewing = false;
-	private CurValue = "";
-	private CurrentSelection: [number, number] = [0, 0];
-
-	private CurrentColor: Color3 = new Color3(1, 1, 1);
+	private readonly State;
 	private OnChanged = (Value: string) => {};
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, RichTextEditorView.Create);
-
-		this.Janitor.Add(
-			this.UI.Content.TextBox.GetPropertyChangedSignal("Text").Connect(() => {
-				if (!this.UI.FindFirstChild("Content")) return; // If the component has been destroyed, we don't need to do anything
-
-				const NewValue = this.UI.Content.TextBox.Text;
-				if (NewValue === this.CurValue) return; // No change, no need to
-
-				this.CurValue = NewValue;
-				this.UpdateHeight();
-				this.OnChanged(NewValue);
-			}),
-			"Disconnect",
-		);
-
-		const UpdateSelection = () => {
-			const TextBox = this.UI.Content.TextBox;
-			if (!TextBox.IsFocused()) return;
-			const CursorPosition = TextBox.CursorPosition;
-			const StartPosition = TextBox.SelectionStart;
-			this.CurrentSelection = [math.min(CursorPosition, StartPosition), math.max(CursorPosition, StartPosition)];
+		const State = {
+			Value: Vide.source(""),
+			Title: Vide.source("Dialog - Quatuar"),
+			Color: Vide.source(new Color3(1, 1, 1)),
+			Selection: Vide.source<[number, number]>([0, 0]),
+			HeightRevision: Vide.source(0),
 		};
-		this.Janitor.Add(
-			this.UI.Content.TextBox.Focused.Connect(() => this.UpdateHeight()),
-			"Disconnect",
-		);
-		this.Janitor.Add(this.UI.Content.TextBox.GetPropertyChangedSignal("CursorPosition").Connect(UpdateSelection), "Disconnect");
-		this.Janitor.Add(this.UI.Content.TextBox.GetPropertyChangedSignal("SelectionStart").Connect(UpdateSelection), "Disconnect");
-
-		this.Janitor.Add(
-			this.UI.Content.TextBox.FocusLost.Connect(() => {
-				if (!this.UI.FindFirstChild("Content")) return;
-				this.UpdateHeight();
+		let Ready = false;
+		super(Manager, ID, (Props) =>
+			RichTextEditorView.Create({
+				...Props,
+				Value: State.Value,
+				Title: State.Title,
+				Color: State.Color,
+				HeightRevision: State.HeightRevision,
+				OnChanged: (Value) => {
+					if (Ready && Value !== Vide.untrack(State.Value)) this.SetValue(Value);
+				},
+				OnSelection: (Start, End) => State.Selection([Start, End]),
+				OnClearSelection: () => this.ClearSelectedText(),
+				OnColor: (Text) => this.SetFontColor(Richtext.TextToColor(Text) ?? Vide.untrack(State.Color)),
+				OnFormat: (Prefix, Suffix) => {
+					this.AppendToSelectedText(Prefix, Suffix);
+					this.ClearSelectedText();
+				},
+				OnHeight: (Height) => {
+					if (this.IsDestroyed() || this.GetYSize() === Height) return;
+					this.SetRootSize(new UDim2(1, 0, 0, Height));
+					this.UpdateParentHeight();
+				},
 			}),
-			"Disconnect",
 		);
-
-		this.Janitor.Add(
-			this.UI.Top.ColorBox.TextBox.Focused.Connect(() => {
-				if (!this.UI.FindFirstChild("Content")) return;
-				this.UI.Top.ColorBox.TextBox.CursorPosition = this.UI.Top.ColorBox.TextBox.Text.size() + 1;
-				this.UI.Top.ColorBox.TextBox.SelectionStart = 1;
-			}),
-			"Disconnect",
-		);
-
-		this.Janitor.Add(
-			this.UI.Top.ColorBox.TextBox.FocusLost.Connect((Enter) => {
-				if (!this.UI.FindFirstChild("Content")) return;
-				if (!Enter) {
-					this.SetFontColor(this.CurrentColor);
-					return;
-				}
-
-				const NewColor = Richtext.TextToColor(this.UI.Top.ColorBox.TextBox.Text);
-				this.SetFontColor(NewColor ?? this.CurrentColor);
-			}),
-			"Disconnect",
-		);
-
-		this.UI.Top.GetChildren()
-			.filter((v): v is typeof this.UI.Top.Bold => v.IsA("Frame") && v.FindFirstChild("Interactibility") !== undefined)
-			.forEach((Button) => {
-				this.Janitor.Add(
-					Button.Interactibility.MouseEnter.Connect(() => {
-						Button.BackgroundTransparency = 0.9;
-					}),
-					"Disconnect",
-				);
-				this.Janitor.Add(
-					Button.Interactibility.MouseLeave.Connect(() => {
-						Button.BackgroundTransparency = 1;
-					}),
-					"Disconnect",
-				);
-
-				this.Janitor.Add(
-					Button.Interactibility.MouseButton1Down.Connect(() => {
-						if (Button.Name === "Bold") {
-							this.AppendToSelectedText("<b>", "</b>");
-						} else if (Button.Name === "Italic") {
-							this.AppendToSelectedText("<i>", "</i>");
-						} else if (Button.Name === "Underline") {
-							this.AppendToSelectedText("<u>", "</u>");
-						} else if (Button.Name === "FontColor") {
-							this.AppendToSelectedText(`<font color='rgb(${this.UI.Top.ColorBox.TextBox.Text})'>`, `</font>`);
-						}
-						this.ClearSelectedText();
-					}),
-					"Disconnect",
-				);
-			});
+		this.State = State;
+		Ready = true;
 	}
 
 	// @outline METHODS
 
 	ClearSelectedText() {
-		this.CurrentSelection = [0, 0];
+		this.State.Selection([0, 0]);
 	}
 
 	GetSelectedText(): string {
-		const Text = this.UI.Content.TextBox.Text;
-		const [Start, End] = this.CurrentSelection;
-
-		if (Start === End) return ""; // No selection
-
-		return Text.sub(Start, End - 1);
+		const [Start, End] = Vide.untrack(this.State.Selection);
+		return Start === End ? "" : this.GetValue().sub(Start, End - 1);
 	}
 
 	AppendToSelectedText(Prefix: string, Suffix = Prefix) {
-		const CurrentText = this.UI.Content.TextBox.Text;
-		const [Start, End] = this.CurrentSelection;
-
-		if (Start === End) return; // No selection, nothing to append to
-
-		const NewText = `${CurrentText.sub(0, Start - 1)}${Prefix}${CurrentText.sub(Start, End - 1)}${Suffix}${CurrentText.sub(End)}`;
-		this.UI.Content.TextBox.Text = NewText;
-		this.SetValue(NewText);
+		const CurrentText = this.GetValue();
+		const [Start, End] = Vide.untrack(this.State.Selection);
+		if (Start === End) return;
+		this.SetValue(`${CurrentText.sub(0, Start - 1)}${Prefix}${CurrentText.sub(Start, End - 1)}${Suffix}${CurrentText.sub(End)}`);
 	}
 
 	SetFontColor(Color: Color3) {
-		this.CurrentColor = Color;
-		this.UI.Top.ColorBox.TextBox.Text = `${math.floor(this.CurrentColor.R * 255)}, ${math.floor(this.CurrentColor.G * 255)}, ${math.floor(this.CurrentColor.B * 255)}`;
-		this.UI.Top.FontColor.Icon.ImageColor3 = this.CurrentColor;
+		this.State.Color(Color);
 	}
 
 	SetText(Text: string) {
-		this.UI.Top.InBetween.TextLabel.Text = Text;
+		this.State.Title(Text);
 		return this;
 	}
 
 	SetValue(Value: string) {
-		this.UI.Content.TextBox.Text = Value;
-		this.CurValue = Value;
-		this.UpdateHeight();
+		this.State.Value(Value);
 		this.OnChanged(Value);
-
 		return this;
 	}
 
 	GetValue() {
-		return this.CurValue;
+		return Vide.untrack(this.State.Value);
 	}
 
 	SetOnChanged(Callback: ((Value: string) => void) | undefined) {
@@ -167,23 +92,7 @@ export class RichtextEditor extends UIComponent<RichTextEditorView.T_UI> {
 	}
 
 	UpdateHeight(IsGlobal?: boolean): this {
-		const CurrentSize = this.UI.Size.Y.Offset;
-		const TextBound = new Instance("GetTextBoundsParams");
-		TextBound.Text = this.UI.Content.TextBox.IsFocused() ? this.UI.Content.TextBox.Text : this.UI.Content.TextBox.ContentText;
-		TextBound.Font = this.UI.Content.TextBox.FontFace;
-		TextBound.Size = this.UI.Content.TextBox.TextSize;
-		TextBound.Width = this.UI.Content.TextBox.AbsoluteSize.X;
-
-		const Bound = game.GetService("TextService").GetTextBoundsAsync(TextBound);
-		TextBound.Destroy();
-		if (this.IsDestroyed()) return this;
-		const TargetHeight = Bound.Y - this.UI.Content.TextBox.Size.Y.Offset;
-		const NewSize = new UDim2(1, 0, 0, TargetHeight + this.UI.Top.Size.Y.Offset + 1 + 2); // 1 is the separator height, 2 is the component's borders
-
-		if (CurrentSize !== NewSize.Y.Offset) {
-			this.SetRootSize(NewSize);
-			this.UpdateParentHeight();
-		}
+		this.State.HeightRevision(Vide.untrack(this.State.HeightRevision) + 1);
 		return this;
 	}
 }

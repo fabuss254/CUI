@@ -1,16 +1,30 @@
+import Vide from "@rbxts/vide";
 import { ScrollingFrameView } from "./Views/ScrollingFrame";
 import type { CUI } from "..";
 import { UIComponent } from "./Base";
 
-export class List extends UIComponent<ScrollingFrameView.T_UI> {
+export class List extends UIComponent<ReturnType<typeof ScrollingFrameView.Create>> {
 	// @outline PROPERTIES
+
+	private readonly State;
 
 	Components = this.Manager.CreateChildManager(this.UI.Content, this);
 
 	// @outline CONSTRUCTOR
 
 	constructor(Manager: CUI.ComponentManager, ID: string) {
-		super(Manager, ID, ScrollingFrameView.Create);
+		const State = {
+			Scroll: Vide.source(0),
+			ContentHeight: Vide.source(0),
+		};
+		super(Manager, ID, (Props) =>
+			ScrollingFrameView.Create({
+				...Props,
+				...State,
+				OnScroll: (Scroll) => State.Scroll(Scroll),
+			}),
+		);
+		this.State = State;
 		this.Janitor.Add(this.Components, "Destroy");
 	}
 
@@ -24,11 +38,11 @@ export class List extends UIComponent<ScrollingFrameView.T_UI> {
 	}
 
 	GetScroll(): number {
-		return this.UI.Content.CanvasPosition.Y;
+		return Vide.untrack(this.State.Scroll);
 	}
 
 	SetScroll(Scroll: number): this {
-		this.UI.Content.CanvasPosition = new Vector2(0, Scroll);
+		this.State.Scroll(Scroll);
 		return this;
 	}
 
@@ -39,7 +53,7 @@ export class List extends UIComponent<ScrollingFrameView.T_UI> {
 	UpdateHeight(IsGlobal?: boolean): this {
 		if (this.Destroyed || !this.UI.Parent) return this;
 
-		this.UI.Content.CanvasSize = new UDim2(0, 0, 0, this.Components.GetComponentsHeight());
+		this.State.ContentHeight(this.Components.GetComponentsHeight());
 		return this;
 	}
 }
