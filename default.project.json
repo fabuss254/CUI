@@ -1,0 +1,11 @@
+{
+	"name": "CUI",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"CUI": {
+				"$path": "out"
+			}
+		}
+	}
+}
