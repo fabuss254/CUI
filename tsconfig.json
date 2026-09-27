@@ -1,4 +1,7 @@
 {
+	"rbxts": {
+		"type": "model"
+	},
 	"include": ["src/**/*", "ExtraTypes/**/*.d.ts"],
 	"exclude": ["archives", "node_modules", "out"],
 	"compilerOptions": {
@@ -6,8 +9,8 @@
 		"allowSyntheticDefaultImports": true,
 		"downlevelIteration": true,
 		"jsx": "react",
-		"jsxFactory": "React.createElement",
-		"jsxFragmentFactory": "React.Fragment",
+		"jsxFactory": "Vide.jsx",
+		"jsxFragmentFactory": "Vide.Fragment",
 		"module": "commonjs",
 		"moduleResolution": "Node",
 		"noLib": true,
@@ -16,6 +19,7 @@
 		"forceConsistentCasingInFileNames": true,
 		"moduleDetection": "force",
 		"strict": true,
+		"declaration": true,
 		"target": "ESNext",
 		"typeRoots": ["node_modules/@rbxts", "ExtraTypes"],
 
