@@ -177,7 +177,7 @@ export namespace RichTextEditorView {
 				<RichTextFormatButton.Component
 					Name="Underlined"
 					Image="rbxassetid://75881124683860"
-					OnActivated={Props.OnClearSelection}
+					OnActivated={() => Props.OnFormat("<u>", "</u>")}
 				/>
 			) as ReturnType<typeof RichTextFormatButton.Component>,
 			FontColor: (
