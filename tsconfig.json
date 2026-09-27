@@ -1,4 +1,6 @@
 {
+	"include": ["src/**/*", "ExtraTypes/**/*.d.ts"],
+	"exclude": ["archives", "node_modules", "out"],
 	"compilerOptions": {
 		// required
 		"allowSyntheticDefaultImports": true,
@@ -18,7 +20,7 @@
 		"typeRoots": ["node_modules/@rbxts", "ExtraTypes"],
 
 		// configurable
-		"types": ["types/plugin", "services/plugin"],
+		"types": ["types/plugin"],
 		"rootDir": "src",
 		"outDir": "out",
 		"baseUrl": "src",

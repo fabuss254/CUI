@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "out/init.lua",
   "scripts": {
-    "build": "rbxtsc",
-    "watch": "rbxtsc -w",
+    "build": "rbxtsc --type model",
+    "watch": "rbxtsc --type model -w",
     "prepublishOnly": "npm run build"
   },
   "keywords": [],
@@ -30,7 +30,10 @@
     "eslint-plugin-roblox-ts": "^1.4.1",
     "prettier": "^3.9.9",
     "roblox-ts": "^3.0.0",
-    "typescript": "^5.9.3",
-		"@rbxts/vide": "^0.6.1"
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@rbxts/janitor": "^1.18.3-ts.0",
+    "@rbxts/vide": "^0.6.1"
   }
 }
